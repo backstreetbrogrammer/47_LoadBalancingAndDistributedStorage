@@ -18,7 +18,7 @@ Tools used:
     - [Configuration](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#configuration)
     - [Docker Primer](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#docker-primer)
     - [HAProxy Installation using Docker](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-installation-using-docker)
-    - [HAProxy Project Setup and Run](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-installation-using-docker)
+    - [HAProxy Project Setup and Run](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-project-setup-and-run)
 3. Introduction to Distributed Storage
 4. Database sharding
 5. MongoDB Installation
@@ -378,7 +378,7 @@ username        ALL = (root) NOPASSWD: /usr/sbin/service docker start
 ### HAProxy Project Setup and Run
 
 - Open the Ubuntu app
-- 
+ 
 
 
 
