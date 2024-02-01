@@ -29,7 +29,7 @@ public class WebServer {
     }
 
     public void startServer() {
-        HttpServer server;
+        final HttpServer server;
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
         } catch (final IOException e) {

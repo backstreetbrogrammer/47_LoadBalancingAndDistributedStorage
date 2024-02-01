@@ -19,10 +19,7 @@ Tools used:
     - [Docker Primer](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#docker-primer)
     - [HAProxy Installation using Docker](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-installation-using-docker)
     - [HAProxy Project Setup and Run](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-project-setup-and-run)
-3. Introduction to Distributed Storage
-4. Database sharding
-5. MongoDB Installation
-6. Scaling MongoDB
+3. Distributed Storage and Database Sharding
 
 ---
 
@@ -378,7 +375,452 @@ username        ALL = (root) NOPASSWD: /usr/sbin/service docker start
 ### HAProxy Project Setup and Run
 
 - Open the Ubuntu app
- 
+- Create a directory: `mkdir haproxy_demo`
+- Do the following project setup:
 
+```
+cd haproxy_demo
+mkdir haproxy webapp
+
+# create a new file: docker-compose.yml
+vi docker-compose.yml
+```
+
+`docker-compose.yml`
+
+```
+version: '3.4'
+
+services:
+  app1:
+    build: ./webapp 
+    container_name: app1
+    command: 9001 "Server 1"
+    ports: 
+      - "9001:9001"
+
+  app2:
+    build: ./webapp
+    container_name: app2
+    command: 9002 "Server 2"
+    ports: 
+      - "9002:9002"
+
+  app3:
+    build: ./webapp
+    container_name: app3
+    command: 9003 "Server 3"
+    ports: 
+      - "9003:9003"
+
+  haproxy:
+    build: ./haproxy
+    container_name: haproxy
+    ports:
+      - "80:80"
+      - "83:83"
+
+```
+
+- Setup **haproxy**
+
+```
+cd haproxy
+
+# create 4 files as given:
+dockerfile  
+haproxy.cfg  
+haproxy_routing.cfg  
+haproxy_tcp_mode.cfg
+```
+
+`dockerfile`
+
+```
+FROM haproxy:1.7
+COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg
+ENTRYPOINT ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+```
+
+`haproxy.cfg`
+
+```
+global
+    maxconn 500
+
+defaults
+    mode http
+    timeout connect 10s
+    timeout client  50s
+    timeout server  50s
+
+frontend http-in
+    bind *:80
+    default_backend application_nodes
+
+backend application_nodes
+    balance roundrobin
+    option httpchk GET /status
+    http-check expect string "Server is alive"
+    server server01 app1:9001 check inter 1s
+    server server02 app2:9002 check inter 2s
+    server server03 app3:9003 check inter 2s
+
+listen stats 
+    bind *:83
+    stats enable
+    stats uri /
+
+```
+
+`haproxy_routing.cfg`
+
+```
+global
+
+defaults
+    mode http
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+
+
+frontend http-in
+    bind *:80
+    acl even_cluster path_end -i /even
+    acl odd_cluster path_end -i /odd
+    
+    use_backend even_servers if even_cluster
+    use_backend odd_servers if odd_cluster
+
+backend even_servers
+    balance roundrobin
+    server server02 app2:9002/time check
+
+backend odd_servers
+    balance roundrobin
+    server server01 app1:9001/time check
+    server server03 app3:9003/time check
+
+```
+
+`haproxy_tcp_mode.cfg`
+
+```
+global
+
+defaults
+    mode tcp
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+
+frontend http-in
+    bind *:80
+    default_backend application_nodes
+
+backend application_nodes
+    balance roundrobin
+    server server01 app1:9001 check
+    server server02 app2:9002 check
+    server server03 app3:9003 check
+
+```
+
+- Setup `webapp` Java project
+
+```
+cd webapp
+mkdir -p src/main/java
+mkdir -p src/main/resources
+mkdir -p src/test/java
+mkdir target
+
+# create 2 files as given:
+dockerfile
+pom.xml
+```
+
+`dockerfile`
+
+```
+FROM maven:3.6.1-jdk-11 AS MAVEN_TOOL_CHAIN_CONTAINER
+RUN mkdir src
+COPY src /tmp/src
+COPY ./pom.xml /tmp/
+WORKDIR /tmp/
+RUN mvn package
+RUN ls -la /tmp
+
+FROM openjdk:11
+COPY --from=MAVEN_TOOL_CHAIN_CONTAINER /tmp/target/webapp-1.0-SNAPSHOT-jar-with-dependencies.jar /tmp/
+WORKDIR /tmp/
+ENTRYPOINT ["java","-jar", "webapp-1.0-SNAPSHOT-jar-with-dependencies.jar"]
+CMD ["80", "Server Name"]
+```
+
+`pom.xml`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>distributed.systems</groupId>
+    <artifactId>webapp</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+                    <release>11</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>Application</mainClass>
+                        </manifest>
+                    </archive>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+            </plugin>
+
+        </plugins>
+
+    </build>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.12.1</version>
+        </dependency>
+
+    </dependencies>
+
+
+</project>
+```
+
+```
+cd src/main/resources/
+
+# create index.html
+```
+
+`index.html`
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Distributed Search</title>
+    <meta http-equiv="cache-control" content="no-cache"/>
+</head>
+<body style="background: #e6f3ff;">
+<h1 style="color:blue; text-align: center; font-style: bold" id="server_name_title">Welcome to </h1>
+<h1 style="color:#00b4ff; text-align: center; font-style: italic" id="server_name"></h1>
+</body>
+</html>
+```
+
+```
+cd src/main/java/
+
+# create 2 Java files:
+
+WebServer
+Application
+```
+
+`WebServer`
+
+```java
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Executors;
+
+public class WebServer {
+
+    private static final String STATUS_ENDPOINT = "/status";
+    private static final String HOME_PAGE_ENDPOINT = "/";
+
+    private static final String HTML_PAGE = "index.html";
+
+    private final int port;
+    private final String serverName;
+
+    public WebServer(final int port, final String serverName) {
+        this.port = port;
+        this.serverName = serverName;
+    }
+
+    public void startServer() {
+        final HttpServer server;
+        try {
+            server = HttpServer.create(new InetSocketAddress(port), 0);
+        } catch (final IOException e) {
+            System.err.println(e.getMessage());
+            return;
+        }
+
+        server.createContext(STATUS_ENDPOINT, this::handleStatusCheckRequest);
+        server.createContext(HOME_PAGE_ENDPOINT, this::handleHomePageRequest);
+
+        server.setExecutor(Executors.newFixedThreadPool(8));
+        System.out.printf("Started server %s on port %d %n", serverName, port);
+        server.start();
+    }
+
+    private void handleHomePageRequest(final HttpExchange exchange) throws IOException {
+        if (!exchange.getRequestMethod().equalsIgnoreCase("get")) {
+            exchange.close();
+            return;
+        }
+
+        System.out.printf("%s received a request%n", this.serverName);
+        exchange.getResponseHeaders().add("Content-Type", "text/html");
+        exchange.getResponseHeaders().add("Cache-Control", "no-cache");
+
+        final byte[] response = loadHtml();
+
+        sendResponse(response, exchange);
+    }
+
+    /**
+     * Loads the HTML page to be fetched to the web browser
+     */
+    private byte[] loadHtml() throws IOException {
+        final InputStream htmlInputStream = getClass().getResourceAsStream(WebServer.HTML_PAGE);
+        if (htmlInputStream == null) {
+            return new byte[]{};
+        }
+
+        final Document document = Jsoup.parse(htmlInputStream, StandardCharsets.UTF_8.name(), "");
+
+        final String modifiedHtml = modifyHtmlDocument(document);
+        return modifiedHtml.getBytes();
+    }
+
+    /**
+     * Fills the server's name and local time in theHTML document
+     *
+     * @param document - original HTML document
+     */
+    private String modifyHtmlDocument(final Document document) {
+        final Element serverNameElement = document.selectFirst("#server_name");
+        serverNameElement.appendText(serverName);
+        return document.toString();
+    }
+
+    private void handleStatusCheckRequest(final HttpExchange exchange) throws IOException {
+        if (!exchange.getRequestMethod().equalsIgnoreCase("get")) {
+            exchange.close();
+            return;
+        }
+
+        System.out.println("Received a health check");
+        final String responseMessage = String.format("Server is alive%n");
+        sendResponse(responseMessage.getBytes(), exchange);
+    }
+
+    private void sendResponse(final byte[] responseBytes, final HttpExchange exchange) throws IOException {
+        exchange.sendResponseHeaders(200, responseBytes.length);
+        final OutputStream outputStream = exchange.getResponseBody();
+        outputStream.write(responseBytes);
+        outputStream.flush();
+        outputStream.close();
+    }
+
+}
+```
+
+`Application`
+
+```java
+public class Application {
+
+    public static void main(final String[] args) {
+        if (args.length != 2) {
+            System.out.println("java -jar (jar name) PORT_NUMBER SERVER_NAME");
+        }
+        final int currentServerPort = Integer.parseInt(args[0]);
+        final String serverName = args[1];
+
+        final WebServer webServer = new WebServer(currentServerPort, serverName);
+
+        webServer.startServer();
+    }
+
+}
+```
+
+Now all our projects are set up, let's build and run.
+
+Build Java Project:
+
+```
+cd ~/haproxy_demo/webapp
+mvn clean install
+
+# this will build the target folder jars
+```
+
+Create Docker images and run the containers:
+
+```
+# install docker-compose first by running this command:
+sudo apt  install docker-compose
+
+# build and run
+cd ~/haproxy_demo/
+docker-compose up --build
+```
+
+Now our containers are running with `app1`, `app2`, `app3` (webapps) along with `haproxy` as load balancer.
+
+- Launch a browser: `localhost:83`
+- This will show: `Statistics Report for HAProxy`
+- Now we can launch: `localhost`
+- This will show: `Welcome to Server n`
+- `n` is the server load balanced by `HAProxy` - it can be 1, 2 or 3
+- Refreshing the browser will keep on giving new server in round-robin fashion
+
+We can stop the application by first running `Ctrl-C` and then running the command: `docker-compose down`
+
+---
+
+## Chapter 03. Distributed Storage and Database Sharding
 
 
