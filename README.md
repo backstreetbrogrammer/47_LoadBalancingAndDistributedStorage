@@ -21,7 +21,7 @@ Tools used:
     - [HAProxy Project Setup and Run](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-project-setup-and-run)
 3. [Distributed Storage and Database Sharding](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#chapter-03-distributed-storage-and-database-sharding)
     - [Database Sharding Overview](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#database-sharding-overview)
-    - [Dynamic Sharding with Consistent Hashing](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#database-sharding-overview)
+    - [Dynamic Sharding with Consistent Hashing](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#dynamic-sharding-with-consistent-hashing)
 
 ---
 
