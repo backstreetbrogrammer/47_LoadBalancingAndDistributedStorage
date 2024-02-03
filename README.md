@@ -1,10 +1,10 @@
 # Load Balancing and Distributed Storage
 
-> This is a tutorial course covering load balancing, distributed storage and databases.
+> This is a tutorial course covering load balancing, distributed storage and database sharding.
 
 Tools used:
 
-- JDK 8
+- JDK 11
 - Maven
 - JUnit 5, Mockito
 - IntelliJ IDE
@@ -19,7 +19,9 @@ Tools used:
     - [Docker Primer](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#docker-primer)
     - [HAProxy Installation using Docker](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-installation-using-docker)
     - [HAProxy Project Setup and Run](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#haproxy-project-setup-and-run)
-3. Distributed Storage and Database Sharding
+3. [Distributed Storage and Database Sharding](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#chapter-03-distributed-storage-and-database-sharding)
+    - [Database Sharding Overview](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#database-sharding-overview)
+    - [Dynamic Sharding with Consistent Hashing](https://github.com/backstreetbrogrammer/47_LoadBalancingAndDistributedStorage?tab=readme-ov-file#database-sharding-overview)
 
 ---
 
@@ -823,4 +825,253 @@ We can stop the application by first running `Ctrl-C` and then running the comma
 
 ## Chapter 03. Distributed Storage and Database Sharding
 
+> Distributed storage is a method of storing data across multiple nodes, typically in a network of interconnected
+> computers.
 
+As a result, the data is readily available, scalable, and resilient against failures.
+
+Unlike traditional storage systems, distributed storage spreads data across multiple locations.
+
+This decentralization reduces the risk of data loss, improves access speed, and lowers costs.
+
+This method departs from traditional storage methods, where data is stored in a central location.
+
+However, the unprecedented growth of data and with the explosion of digital content, traditional storage methods
+struggle to keep up.
+
+They're not just falling short in terms of capacity but also in terms of speed, security, and reliability.
+
+That's where distributed storage comes in, offering a more robust, scalable, and secure solution for data storage.
+
+**_Database vs File System_**
+
+A **File System** is:
+
+- a lower level, general purpose approach to storage of data of any format, structure or size
+- best for unstructured data, or data with no relationship to other data
+- examples: video file, audio file, text file, memory logs
+
+A `Database` is:
+
+- an application which is a higher level abstraction that provides additional capabilities (query language/engine),
+  caching and performance optimizations
+- provides restrictions on structure, relationship and format
+- guarantees **ACID** transactions: Atomicity, Consistency, Isolation, Durability
+
+**_Types of Databases_**
+
+There are two types of databases:
+
+- Relational Databases (SQL): Data is structured as tables (rows and columns)
+- Non-Relational Databases (NoSQL): Less structured data
+    - Key/Value pairs
+    - Key/Document pairs
+    - Graph Databases
+
+**_Centralized Database_**
+
+We want our database to provide availability, scalability and fault tolerance.
+
+A **centralized** database cannot achieve these characteristics as it has a **single point of failure**:
+
+- losing a database is a lot worse than losing a compute node
+- temporary failure to operate the business
+- permanently losing our data
+- compute nodes can easily be restored
+- permanent data loss can be detrimental to the business
+
+Performance Bottleneck:
+
+- parallelism is limited to the number of cores in a machine
+- limited connections the OS and network card can support
+- minimum latency depends on the geographical location of the database instance and the user
+- limited to the memory a single machine can have
+
+### Database Sharding Overview
+
+- **Sharding**: partitioning a large dataset into multiple smaller chunks of data called **shards**
+- Using sharding, we can split a large datasets into smaller pieces living on different machines
+
+![DatabasePartitions](DatabasePartitions.PNG)
+
+Sharding is a database architecture pattern related to **horizontal partitioning** — the practice of separating one
+table's rows into multiple different tables, known as **partitions**.
+
+Each partition has the same schema and columns, but also entirely different rows. Likewise, the data held in each is
+unique and independent of the data held in other partitions.
+
+In a **vertically-partitioned** table, entire columns are separated out and put into new, distinct tables.
+
+The data held within one vertical partition is independent of the data in all the others, and each holds both distinct
+rows and columns.
+
+**_Key-Based Sharding_**
+
+![KeyBasedSharding](KeyBasedSharding.PNG)
+
+- Sharding is done based on the record's key
+- The key determines in which shard
+    - to find an existing record
+    - to add a new record with a new key
+
+**_Range-Based Sharding_**
+
+![RangeBasedSharding](RangeBasedSharding.PNG)
+
+- We divide the keyspace into multiple contiguous range
+- Records with nearby keys will more likely end up in the same shard
+- Range-based queries will be a lot more efficient
+
+**_Directory-Based Sharding_**
+
+![DirectoryBasedSharding](DirectoryBasedSharding.PNG)
+
+- Use a lookup table to match database information to the corresponding physical shard
+- A lookup table is like a table on a spreadsheet that links a database column to a shard key
+
+### Dynamic Sharding with Consistent Hashing
+
+Let's take an example where we have four shards of our database.
+
+Any record is stored in a particular shard based on the formula: `Hash(Key) mod 4`
+
+Now suppose we want to add one more shard => then we need to shuffle a lot of records based on the above formula which
+is tweaked as: `Hash(Key) mod 4`.
+
+Similarly, if a shard is removed, again the records need to be shuffled across.
+
+Also, if we want to do **weighted distribution** of shards, the **hash-based** sharding could not be used.
+
+So, we need a distribution scheme that does not depend directly on the number of servers, so that, when adding or
+removing servers, the number of keys that need to be relocated is minimized.
+
+**Consistent Hashing** is a distributed hashing scheme that operates independently of the number of servers or objects
+in a distributed hash table by assigning them a position on an abstract circle, or **hash ring**.
+
+This allows servers and objects to scale without affecting the overall system.
+
+High-level steps involved in consistent hashing:
+
+- First, we decide the output range of a hash function. For example, `2**32` or `INT_MAX` or any other value. This range
+  is called **hash space**.
+- Then we map this hash space in a logical circle called the **hash ring**
+- Next, we hash all the servers using a hash function and map them on the hash ring
+- Similarly, we hash all the keys using the **_same_** hash function and map them on the same hash ring
+- Finally, we traverse in the **clockwise** direction to locate a server
+
+**_Consistent Hashing example_**
+
+Suppose we have a hash range from `0 to 60,000` and we map all the **servers** and **keys** on the hash ring:
+
+![HashRing](HashRing.PNG)
+
+For example, key `K8` is placed on server `S2`, key `K7` is located on server `S3`, and so on.
+
+To locate a server for a particular object, we traverse in a **clockwise** direction from the current position. The
+traversal stops when we find the required server.
+
+If we **remove** server `S2`, we just need to redistribute the key `K8` to the next server, which comes in a clockwise
+direction.
+
+Similarly, if we **add** a new server between the servers `S4` and `S1` then we just need to redistribute the key `K6`
+to the newly added server.
+
+In this way, consistent hashing allows elasticity in the cluster with minimal object redistribution.
+
+**_Consistent Hashing implementation in Java_**
+
+To implement consistent hashing in Java, we'll use the `TreeMap` class to represent the **hash ring**.
+
+The `TreeMap` class is a **sorted map** that maps the hash values to server names.
+
+We'll use the `MD5` hash function to generate the hash values, which is a widely used hash function that produces a
+`128-bit` hash value.
+
+To add a server to the ring, we'll generate multiple virtual nodes for that server and add them to the ring.
+
+We'll also use a hash function to generate the name of the virtual node by appending a unique identifier to the server
+name.
+
+```java
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+public class ConsistentHashingDemo {
+
+    private final TreeMap<Long, String> ring;
+    private final int numberOfReplicas;
+    private final MessageDigest md;
+
+    public ConsistentHashingDemo(final int numberOfReplicas) throws NoSuchAlgorithmException {
+        this.ring = new TreeMap<>();
+        this.numberOfReplicas = numberOfReplicas;
+        this.md = MessageDigest.getInstance("MD5");
+    }
+
+    public void addServer(final String server) {
+        for (int i = 0; i < numberOfReplicas; i++) {
+            final long hash = generateHash(server + i);
+            ring.put(hash, server);
+        }
+    }
+
+    public void removeServer(final String server) {
+        for (int i = 0; i < numberOfReplicas; i++) {
+            final long hash = generateHash(server + i);
+            ring.remove(hash);
+        }
+    }
+
+    public String getServer(final String key) {
+        if (ring.isEmpty()) {
+            return null;
+        }
+        long hash = generateHash(key);
+        if (!ring.containsKey(hash)) {
+            final SortedMap<Long, String> tailMap = ring.tailMap(hash);
+            hash = tailMap.isEmpty() ? ring.firstKey() : tailMap.firstKey();
+        }
+        return ring.get(hash);
+    }
+
+    private long generateHash(final String key) {
+        md.reset();
+        md.update(key.getBytes());
+        final byte[] digest = md.digest();
+        final long hash = ((long) (digest[3] & 0xFF) << 24) |
+                ((long) (digest[2] & 0xFF) << 16) |
+                ((long) (digest[1] & 0xFF) << 8) |
+                ((long) (digest[0] & 0xFF));
+        return hash;
+    }
+
+    public static void main(final String[] args) throws NoSuchAlgorithmException {
+        final ConsistentHashingDemo consistentHashing = new ConsistentHashingDemo(3);
+        consistentHashing.addServer("server1");
+        consistentHashing.addServer("server2");
+        consistentHashing.addServer("server3");
+
+        System.out.printf("key1: is present on server: %s%n", consistentHashing.getServer("key1"));
+        System.out.printf("key67890: is present on server: %s%n", consistentHashing.getServer("key67890"));
+
+        consistentHashing.removeServer("server1");
+        System.out.println("After removing server1");
+
+        System.out.printf("key1: is present on server: %s%n", consistentHashing.getServer("key1"));
+        System.out.printf("key67890: is present on server: %s%n", consistentHashing.getServer("key67890"));
+    }
+
+}
+```
+
+**Output:**
+
+```
+key1: is present on server: server1
+key67890: is present on server: server3
+After removing server1
+key1: is present on server: server3
+key67890: is present on server: server3
+```
